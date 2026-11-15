@@ -1,0 +1,605 @@
+{
+  "name": "Apex Interiors Kenya - Customer Enquiry & Follow-Up System.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "a47d261a-a17f-4f65-8bf0-f81107f1e9c5",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "793d84a3-911a-4881-9ac2-a2b87ff02ad2",
+      "name": "Webhook",
+      "webhookId": "a47d261a-a17f-4f65-8bf0-f81107f1e9c5"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "68f55938-fc95-44b1-b206-5075b39e2d95",
+              "name": "fullName",
+              "value": "={{ $json.body.data.fields[0].value }}",
+              "type": "string"
+            },
+            {
+              "id": "f32998a4-2cd8-48f7-b9d9-c61f19a0bc8e",
+              "name": "email",
+              "value": "={{ $json.body.data.fields[1].value }}",
+              "type": "string"
+            },
+            {
+              "id": "315551ae-e8a0-4f56-be33-a4614119f22e",
+              "name": "phone",
+              "value": "={{ $json.body.data.fields[2].value }}",
+              "type": "string"
+            },
+            {
+              "id": "95829647-c00a-4d29-ae44-8abe214294ba",
+              "name": "projectType",
+              "value": "={{ $json.body.data.fields[3].options.find(o => o.id === $json.body.data.fields[3].value[0]).text }}\n",
+              "type": "string"
+            },
+            {
+              "id": "22f5a4a8-60f9-4e20-aec1-c2a3a11ed9f4",
+              "name": "budgetInput",
+              "value": "={{ $json.body.data.fields[4].value }}",
+              "type": "number"
+            },
+            {
+              "id": "df428210-d28c-488d-982f-70f4059e1381",
+              "name": "description",
+              "value": "={{ $json.body.data.fields[5].value }}",
+              "type": "string"
+            },
+            {
+              "id": "4a9a9b6c-5ab6-41f6-8984-896824c9ec82",
+              "name": "submittedAt",
+              "value": "={{ $json.body.data.fields[6].value }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "d669a71e-c774-4f15-8fd0-ff4ae1864ebd",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-3-flash-preview"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an operations assistant for Apex Interiors Kenya, a Nairobi-based interior design and renovation company.\n\nAnalyze the customer enquiry below and return ONLY valid JSON with no markdown, no code fences, and no extra commentary.\n\nRequired JSON schema:\n{\n  \"fullName\": \"string\",\n  \"email\": \"string\",\n  \"phone\": \"string\",\n  \"projectType\": \"string\",\n  \"budget\": number,\n  \"summary\": \"string (2-3 concise sentences summarizing the scope, style/requirements, and urgency)\"\n}\n\nRules:\n- Convert budget to a clean numeric KES value with no commas or currency symbols (e.g., 75000). If unclear or missing, use 0.\n- Keep phone as an empty string \"\" if not provided.\n- Keep summary professional, factual, and useful for an interior design consultant.\n\nCustomer Enquiry:\n- Full Name: {{ $json.fullName }}\n- Email: {{ $json.email }}\n- Phone: {{ $json.phone }}\n- Project Type: {{ $json.projectType }}\n- Estimated Budget: {{ $json.budgetInput }}\n- Project Description: {{ $json.description }}\n- Submitted At: {{ $json.submittedAt }}\n",
+              "role": "=user"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "6813e431-f78e-44fb-a9bc-9c3d1183b24c",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "VI8BN6V6XUuFarGi",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.content.parts[0].text;\n\nif (!raw || typeof raw !== 'string') {\n  throw new Error('Gemini output text is missing.');\n}\n\nconst cleaned = raw\n  .replace(/```json/gi, '')\n  .replace(/```/g, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (err) {\n  throw new Error('Failed to parse Gemini JSON: ' + err.message + ' | Raw: ' + cleaned);\n}\n\nconst budget = Number(parsed.budget);\nif (Number.isNaN(budget) || budget < 0) {\n  throw new Error('Invalid budget returned by Gemini: ' + parsed.budget);\n}\n\nconst leadData = $('Edit Fields').first().json;\n\nreturn {\n  json: {\n    fullName: String(parsed.fullName || leadData.fullName || '').trim(),\n    email: String(parsed.email || leadData.email || '').trim(),\n    phone: String(parsed.phone || leadData.phone || '').trim(),\n    projectType: String(parsed.projectType || leadData.projectType || '').trim(),\n    budget,\n    summary: String(parsed.summary || '').trim(),\n    description: String(leadData.description || '').trim(),\n    submittedAt: String(leadData.submittedAt || new Date().toISOString()).trim()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "id": "0af6b4c3-b572-4fc1-b016-a1aca2620318",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "4af27964-0bdf-41fc-9b3b-790ab58964d5",
+              "leftValue": "={{ $json.budget }}",
+              "rightValue": 50000,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1024,
+        0
+      ],
+      "id": "283b38ca-8b44-40ce-b625-cb5004a8a939",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Code in JavaScript').item.json.email }}",
+        "subject": "=We've Received Your {{ $json.projectType }} Enquiry — Apex Interiors Kenya",
+        "emailType": "text",
+        "message": "=Hi {{ $json.fullName }},  Thank you for reaching out to Apex Interiors Kenya regarding your {{ $json.projectType }} project.  We have reviewed the details of your enquiry (Estimated Budget: KES {{ $json.budget }}) and assigned it priority attention. One of our senior interior design consultants will contact you shortly to schedule a discovery consultation and discuss the next steps.  Summary of your request: {{ $json.summary }}  Warm regards, Client Experience Team Apex Interiors Kenya Nairobi, Kenya",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1248,
+        -96
+      ],
+      "id": "340a7d37-2e8f-4df6-830e-9266a3c647be",
+      "name": "Send a message",
+      "webhookId": "61c2b292-f79a-4a62-83c7-65f514d85c9d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ZQ3mrWXPTzE1Ao4J",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Li-fJDO5loNam-tajMoLo-UbK0vJPzZfLsxq4ndF2F8",
+          "mode": "list",
+          "cachedResultName": "Apex Interiors | Customer Enquiries",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Li-fJDO5loNam-tajMoLo-UbK0vJPzZfLsxq4ndF2F8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "High-Budget Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Li-fJDO5loNam-tajMoLo-UbK0vJPzZfLsxq4ndF2F8/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "fullName": "={{ $('Edit Fields').item.json.fullName }}",
+            "submittedAt": "={{ $('Edit Fields').item.json.submittedAt }}",
+            "email": "={{ $('Edit Fields').item.json.email }}",
+            "phone": "={{ $('Edit Fields').item.json.phone }}",
+            "projectType": "={{ $('Edit Fields').item.json.projectType }}",
+            "budget": "={{ $('Edit Fields').item.json.budgetInput }}",
+            "description": "={{ $('Edit Fields').item.json.description }}",
+            "summary": "={{ $('Code in JavaScript').item.json.summary }}",
+            "status": "Priority - Email Sent"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "submittedAt",
+              "displayName": "submittedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fullName",
+              "displayName": "fullName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "projectType",
+              "displayName": "projectType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1472,
+        -96
+      ],
+      "id": "1a2f874c-7289-40fc-9cba-d91116a00b1f",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HsQXYKRxdJHM1R7m",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Li-fJDO5loNam-tajMoLo-UbK0vJPzZfLsxq4ndF2F8",
+          "mode": "list",
+          "cachedResultName": "Apex Interiors | Customer Enquiries",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Li-fJDO5loNam-tajMoLo-UbK0vJPzZfLsxq4ndF2F8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1065215624,
+          "mode": "list",
+          "cachedResultName": "Standard Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Li-fJDO5loNam-tajMoLo-UbK0vJPzZfLsxq4ndF2F8/edit#gid=1065215624"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "submittedAt": "={{ $('Code in JavaScript').item.json.submittedAt }}",
+            "fullName": "={{ $('Code in JavaScript').item.json.fullName }}",
+            "email": "={{ $('Code in JavaScript').item.json.email }}",
+            "phone": "={{ $('Code in JavaScript').item.json.phone }}",
+            "projectType": "={{ $('Code in JavaScript').item.json.projectType }}",
+            "budget": "={{ $('Code in JavaScript').item.json.budget }}",
+            "description": "={{ $('Code in JavaScript').item.json.description }}",
+            "summary": "={{ $('Code in JavaScript').item.json.summary }}",
+            "status": "Standard - Follow-Up Pending"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "submittedAt",
+              "displayName": "submittedAt",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fullName",
+              "displayName": "fullName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "projectType",
+              "displayName": "projectType",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1248,
+        96
+      ],
+      "id": "cc23c3bf-53c7-49a8-a19e-34036f2c298b",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "HsQXYKRxdJHM1R7m",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "hours"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1472,
+        96
+      ],
+      "id": "227a7371-40f1-4895-ae63-65405048e8cb",
+      "name": "Wait",
+      "webhookId": "0a7ddcce-e565-49eb-b67d-4b22898d1121"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Edit Fields').item.json.email }}",
+        "subject": "=Follow-Up on Your {{ $('Code in JavaScript').item.json.projectType }} Enquiry — Apex Interiors Kenya",
+        "emailType": "text",
+        "message": "=Hi {{ $('Code in JavaScript').item.json.fullName }},  Thank you for contacting Apex Interiors Kenya about your {{ $('Code in JavaScript').item.json.projectType }} enquiry.  We have logged your project details (Estimated Budget: KES {{ $('Code in JavaScript').item.json.budget }}) and one of our design coordinators will review your requirements and reach out with tailored options and next steps.  Summary of your request: {{ $('Code in JavaScript').item.json.summary }}  Best regards, Client Experience Team Apex Interiors Kenya Nairobi, Kenya",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1696,
+        96
+      ],
+      "id": "6de93c06-3a9c-4635-9176-bc007d0a82c3",
+      "name": "Send a message1",
+      "webhookId": "bbdf1d80-43a4-44f8-826a-59462db804cc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ZQ3mrWXPTzE1Ao4J",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a845926a-46fd-44e3-a427-a0a16c85a24c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "92559aec243b989dd8aba9c0d8cdf9cdce14832ba1c7c83e9ae6118d7d144c9e"
+  },
+  "nodeGroups": [],
+  "id": "8KjHClJBjk2JkpAl",
+  "tags": []
+}
